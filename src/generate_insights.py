@@ -8,18 +8,36 @@ from insight_engine import (
     build_prompt,
 )
 
-INPUT_PATH = "data/input/kpi_weekly_sales.csv"
+INPUT_PATH = "data/input/transactions.csv"
 OUTPUT_PATH = "output/insights.txt"
+
+
+# Change this per client file.
+# Left side = OpsSheet standard name.
+# Right side = actual column name in the uploaded/client CSV.
+COLUMN_MAP = {
+    "transaction_id": "transaction_id",
+    "date": "date",
+    "amount": "amount",
+
+    # optional fields — include only if useful/present
+    "customer_id": "customer_id",
+    "product": "product",
+    "category": "category",
+}
 
 
 def main():
     os.makedirs("output", exist_ok=True)
 
-    df = load_kpis(INPUT_PATH)
-    summary = build_metric_summary(df)
-    rule_insights = generate_rule_based_insights(summary)
+    weekly_kpis, data_quality = load_kpis(INPUT_PATH, COLUMN_MAP)
 
-    prompt = build_prompt(summary, rule_insights)
+    summary = build_metric_summary(weekly_kpis)
+
+    rule_insights = generate_rule_based_insights(summary, data_quality)
+
+
+    prompt = build_prompt(summary, rule_insights, data_quality)
 
     api_key = os.getenv("OPENAI_API_KEY")
 
@@ -34,10 +52,13 @@ def main():
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You write practical business KPI insights."},
+                {
+                    "role": "system",
+                    "content": "You write practical business KPI insights for non-technical stakeholders.",
+                },
                 {"role": "user", "content": prompt},
             ],
-            temperature=0.3,
+            temperature=0.2,
         )
 
         insight_text = response.choices[0].message.content.strip()
